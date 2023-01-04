@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torchvision
 import ffmpeg
+import math
 
 
 def joints_dict():
@@ -29,13 +30,16 @@ def joints_dict():
                 16: "right_ankle"
             },
             "skeleton": [
-                # # [16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12], [7, 13], [6, 7], [6, 8],
-                # # [7, 9], [8, 10], [9, 11], [2, 3], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7]
+                ## [16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12], [7, 13], [6, 7], [6, 8],
+                ## [7, 9], [8, 10], [9, 11], [2, 3], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7]
                 # [15, 13], [13, 11], [16, 14], [14, 12], [11, 12], [5, 11], [6, 12], [5, 6], [5, 7],
                 # [6, 8], [7, 9], [8, 10], [1, 2], [0, 1], [0, 2], [1, 3], [2, 4], [3, 5], [4, 6]
-                [15, 13], [13, 11], [16, 14], [14, 12], [11, 12], [5, 11], [6, 12], [5, 6], [5, 7],
-                [6, 8], [7, 9], [8, 10], [1, 2], [0, 1], [0, 2], [1, 3], [2, 4],  # [3, 5], [4, 6]
-                [0, 5], [0, 6]
+                
+                # [15, 13], [13, 11], [16, 14], [14, 12], [11, 12], [5, 11], [6, 12], [5, 6], [5, 7],
+                # [6, 8], [7, 9], [8, 10], [1, 2], [0, 1], [0, 2], [1, 3], [2, 4],  # [3, 5], [4, 6]
+                # [0, 5], [0, 6]
+                [3,5],[7,5]
+                # ,[4,6]
             ]
         },
         "mpii": {
@@ -66,6 +70,9 @@ def joints_dict():
         },
     }
     return joints
+
+
+
 
 
 def draw_points(image, points, color_palette='tab20', palette_samples=16, confidence_threshold=0.5):
@@ -106,6 +113,19 @@ def draw_points(image, points, color_palette='tab20', palette_samples=16, confid
 
     return image
 
+class Angle:
+    def __init__(self,point1,point2,point3,point4):
+        self.point1 = point1
+        self.point2 = point2 
+        self.point3 = point3 
+        self.point4 = point4
+
+    def xyztoangle(self):
+        return math.degrees(math.atan2(self.point4-self.point2,self.point3-self.point1))    
+    
+    def distance(self):
+        return math.sqrt((self.point4-self.point2)*(self.point4-self.point2)+(self.point3-self.point1)*(self.point3-self.point1))
+
 
 def draw_skeleton(image, points, skeleton, color_palette='Set2', palette_samples=8, person_index=0,
                   confidence_threshold=0.5):
@@ -133,6 +153,7 @@ def draw_skeleton(image, points, skeleton, color_palette='Set2', palette_samples
         A new image with overlaid joints
 
     """
+    queue = []
     try:
         colors = np.round(
             np.array(plt.get_cmap(color_palette).colors) * 255
@@ -141,7 +162,6 @@ def draw_skeleton(image, points, skeleton, color_palette='Set2', palette_samples
         colors = np.round(
             np.array(plt.get_cmap(color_palette)(np.linspace(0, 1, palette_samples))) * 255
         ).astype(np.uint8)[:, -2::-1].tolist()
-
     for i, joint in enumerate(skeleton):
         pt1, pt2 = points[joint]
         if pt1[2] > confidence_threshold and pt2[2] > confidence_threshold:
@@ -149,6 +169,33 @@ def draw_skeleton(image, points, skeleton, color_palette='Set2', palette_samples
                 image, (int(pt1[1]), int(pt1[0])), (int(pt2[1]), int(pt2[0])),
                 tuple(colors[person_index % len(colors)]), 2
             )
+
+            angle1 = Angle(int(pt1[1]),int(pt1[0]),int(pt2[1]),int(pt2[0]))
+            queue.append(angle1.xyztoangle())
+            text = "turtle neck!"
+            if len(queue)== 2:
+                angle = round(-(queue.pop()-queue.pop()),4)
+                # angle = round((queue.pop()+queue.pop()),4)
+                image = cv2.putText(image,str(angle),(10,100),cv2.FONT_HERSHEY_SIMPLEX,2,(0,155,0),2,cv2.LINE_AA)
+                if angle<55:
+                    image = cv2.putText(image,text,(10,50),cv2.FONT_HERSHEY_SIMPLEX,2,(0,0,155),2,cv2.LINE_AA)
+            
+           
+
+            
+
+            #arccos
+            # queue.append(angle1.distance())
+            # text = "turtle neck!"
+            # if len(queue)== 3:
+            #     A = queue.pop()
+            #     C = queue.pop()
+            #     B = queue.pop()
+            #     angle = math.degrees(math.acos((math.pow(A,2)+math.pow(C,2)-math.pow(B,2))/(2*A*C)))
+            #     # angle = round((queue.pop()+queue.pop()),4)
+            #     image = cv2.putText(image,str(angle),(10,100),cv2.FONT_HERSHEY_SIMPLEX,2,(0,155,0),2,cv2.LINE_AA)
+            #     if angle<55:
+            #         image = cv2.putText(image,text,(10,50),cv2.FONT_HERSHEY_SIMPLEX,2,(0,0,155),2,cv2.LINE_AA)
 
     return image
 
@@ -291,3 +338,5 @@ def check_video_rotation(filename):
         pass
 
     return rotation_code
+
+# %%
